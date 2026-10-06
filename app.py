@@ -385,4 +385,92 @@ bus_seg_matrix = pd.DataFrame(0, index=standard_segments, columns=standard_regio
 bus_quotas = {"R0M-R1M": 1600, "R1M-R5M": 1100, "R5M-R10M": 900, "R10-R60M": 1100}
 
 if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.columns and "V44011" in df_grow.columns:
-    str_
+    str_val = df_grow["V9999"].astype(str).str.lower()
+    completed_df = df_grow[str_val.str.contains("continue", na=False)].copy()
+    
+    for idx, row in completed_df.iterrows():
+        raw_sub = row.get("V13290", "")
+        raw_reg = row.get("V12290", "")
+        _, mapped_reg = map_subregion_and_region(raw_sub, raw_reg)
+        
+        v44 = str(row.get("V44011", "")).lower()
+        seg_name = None
+        if "r0m-r1m" in v44:
+            seg_name = "R0M-R1M"
+        elif "r1m-r5m" in v44:
+            seg_name = "R1M-R5M"
+        elif "r5m-r10" in v44:
+            seg_name = "R5M-R10M"
+        elif "r10m-r60m" in v44:
+            seg_name = "R10-R60M"
+            
+        if seg_name and seg_name in bus_seg_matrix.index and mapped_reg in bus_seg_matrix.columns:
+            bus_seg_matrix.loc[seg_name, mapped_reg] += 1
+
+bus_seg_matrix["Total"] = bus_seg_matrix[standard_regions].sum(axis=1)
+for seg in standard_segments:
+    q_val = bus_quotas.get(seg, 0)
+    ach_val = bus_seg_matrix.loc[seg, "Total"]
+    bus_seg_matrix.loc[seg, "Quota"] = q_val
+    bus_seg_matrix.loc[seg, "Outstanding"] = max(0, q_val - ach_val)
+
+st.markdown("#### Business Segment Breakdown Matrix (Quota & Outstanding)")
+st.dataframe(bus_seg_matrix, use_container_width=True)
+
+# Build Business Regional vs Segments Crosstab (Sub-regions as Rows, Segments R0m-R1m, R1m-R5m, R5m-R10 as Columns)[cite: 15]
+crosstab_segments = ["R0m-R1m", "R1m-R5m", "R5m-R10"]
+bus_reg_seg_crosstab = pd.DataFrame(0, index=standard_subregions, columns=crosstab_segments + ["TOTAL"])
+
+if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.columns and "V44011" in df_grow.columns:
+    str_val = df_grow["V9999"].astype(str).str.lower()
+    completed_df = df_grow[str_val.str.contains("continue", na=False)].copy()
+    
+    for idx, row in completed_df.iterrows():
+        raw_sub = row.get("V13290", "")
+        raw_reg = row.get("V12290", "")
+        mapped_sub, _ = map_subregion_and_region(raw_sub, raw_reg)
+        
+        v44 = str(row.get("V44011", "")).lower()
+        col_name = None
+        if "r0m-r1m" in v44:
+            col_name = "R0m-R1m"
+        elif "r1m-r5m" in v44:
+            col_name = "R1m-R5m"
+        elif "r5m-r10" in v44:
+            col_name = "R5m-R10"
+            
+        if mapped_sub in bus_reg_seg_crosstab.index and col_name in bus_reg_seg_crosstab.columns:
+            bus_reg_seg_crosstab.loc[mapped_sub, col_name] += 1
+
+bus_reg_seg_crosstab["TOTAL"] = bus_reg_seg_crosstab[crosstab_segments].sum(axis=1)
+
+# Add TOTAL row at the bottom matching the exact format
+total_row = bus_reg_seg_crosstab.sum(numeric_only=True)
+bus_reg_seg_crosstab.loc["TOTAL"] = total_row
+
+st.markdown("#### Business Regional vs. Segments Crosstab (Sub-regions as Rows, Segments as Columns)")
+st.dataframe(bus_reg_seg_crosstab, use_container_width=True)
+
+# ==========================================
+# SECTION 7: EXCEL DOWNLOAD WORKBOOK GENERATION
+# ==========================================
+st.markdown("---")
+st.markdown("### 📥 Download PM Update Workbook")
+
+def create_pm_workbook():
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_summary.to_excel(writer, sheet_name='Summary', index=False)
+        df_seg_breakdown.to_excel(writer, sheet_name='Segment Quotas', index=False)
+        bus_reg_matrix.to_excel(writer, sheet_name='Update Business (Region)')
+        bus_seg_matrix.to_excel(writer, sheet_name='Update Business (Segment)')
+        bus_reg_seg_crosstab.to_excel(writer, sheet_name='Update Business (Subreg vs Seg)')
+    return output.getvalue()
+
+excel_data = create_pm_workbook()
+st.download_button(
+    label="📊 Generate & Download Exact PM Update Workbook",
+    data=excel_data,
+    file_name="Star_Detailed_Update_Live.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
