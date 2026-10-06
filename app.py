@@ -490,7 +490,7 @@ def map_ent_subregion_and_region(row_sub, row_reg):
     elif "NORTH WEST" in sub_upper:
         return "North West", "Inland"
     elif "NORTHERN CAPE" in sub_upper:
-        return "Northern Cape", "Cape"
+        return "Northern Cape", "Inland"
     elif "WESTERN CAPE INLAND" in sub_upper:
         return "Western Cape Inland", "Cape"
     elif "WESTERN CAPE METRO" in sub_upper:
