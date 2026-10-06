@@ -1,3 +1,4 @@
+import tempfile
 import pandas as pd
 import pyreadstat
 import streamlit as st
@@ -101,19 +102,20 @@ with up_col3:
     file_pubw = st.file_uploader("Upload PUBSC (.sav)", type=["sav"])
 
 
-# Helper function to process uploaded .sav file
+# Helper function to process uploaded .sav file securely via temporary path
 def load_spss_data(uploaded_file):
-    if uploaded_file is not None:
-        try:
-            # Read sav file with value labels applied automatically
-            df, meta = pyreadstat.read_sav(
-                uploaded_file, apply_value_formats=True
-            )
-            return df
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-            return None
-    return None
+  if uploaded_file is not None:
+    try:
+      with tempfile.NamedTemporaryFile(delete=False, suffix=".sav") as tmp_file:
+        tmp_file.write(uploaded_file.getvalue())
+        tmp_path = tmp_file.name
+
+      df, meta = pyreadstat.read_sav(tmp_path, apply_value_formats=True)
+      return df
+    except Exception as e:
+      st.error(f"Error reading file: {e}")
+      return None
+  return None
 
 
 df_grow = load_spss_data(file_grow)
@@ -123,11 +125,10 @@ df_pubw = load_spss_data(file_pubw)
 
 # Calculation Logic for Completions (V9999 == 1)
 def count_completions(df):
-    if df is not None and "V9999" in df.columns:
-        # Count rows where V9999 equals 1 (or string '1' depending on SPSS formatting)
-        completed_filter = (df["V9999"] == 1) | (df["V9999"] == "1")
-        return int(completed_filter.sum())
-    return 0
+  if df is not None and "V9999" in df.columns:
+    completed_filter = (df["V9999"] == 1) | (df["V9999"] == "1")
+    return int(completed_filter.sum())
+  return 0
 
 
 achieved_growth = count_completions(df_grow)
@@ -151,130 +152,18 @@ st.markdown("### 📋 Executive Summary Overview")
 
 m1, m2, m3, m4 = st.columns(4)
 with m1:
-    st.metric(
-        label="Total Target Quota", value=f"{total_target_quota:,.0f}"
-    )
+  st.metric(label="Total Target Quota", value=f"{total_target_quota:,.0f}")
 with m2:
-    st.metric(
-        label="Total Achieved",
-        value=f"{total_achieved:,.0f}",
-        delta=f"{overall_progress:.1f}% Complete",
-    )
+  st.metric(
+      label="Total Achieved",
+      value=f"{total_achieved:,.0f}",
+      delta=f"{overall_progress:.1f}% Complete",
+  )
 with m3:
-    st.metric(
-        label="Total Outstanding", value=f"{total_outstanding:,.0f}"
-    )
+  st.metric(label="Total Outstanding", value=f"{total_outstanding:,.0f}")
 with m4:
-    st.metric(label="Overall Progress", value=f"{overall_progress:.1f}%")
+  st.metric(label="Overall Progress", value=f"{overall_progress:.1f}%")
 
 # High-Level Summary Table
 summary_data = {
     "Segment": ["Business", "Enterprise", "PUBSC", "Total"],
-    "TOTAL Target": [
-        business_target,
-        enterprise_target,
-        pubsc_target,
-        total_target_quota,
-    ],
-    "TOTAL Achieved": [
-        achieved_growth,
-        achieved_rmw,
-        achieved_pubw,
-        total_achieved,
-    ],
-    "TOTAL Outstanding": [
-        max(0, business_target - achieved_growth),
-        max(0, enterprise_target - achieved_rmw),
-        max(0, pubsc_target - achieved_pubw),
-        total_outstanding,
-    ],
-}
-df_summary = pd.DataFrame(summary_data)
-st.dataframe(df_summary, use_container_width=True, hide_index=True)
-
-st.markdown("---")
-
-# ==========================================
-# SECTION 5: SEGMENT QUOTAS EXECUTIVE SUMMARY BREAKDOWN
-# ==========================================
-st.markdown("### 📊 Segment Quotas Executive Summary Breakdown")
-
-# Note: Segment-level achieved counts aggregate from data files where SEG/Q80003 match the bracket text labels.
-# Here we set up the structural template dataframe.
-
-
-def get_segment_achieved(segment_name):
-    count = 0
-    for df in [df_grow, df_rmw, df_pubw]:
-        if df is not None and "V9999" in df.columns:
-            completed = (df["V9999"] == 1) | (df["V9999"] == "1")
-            # Check if segment column exists (usually 'SEG' or 'Q80003')
-            seg_col = (
-                "SEG"
-                if "SEG" in df.columns
-                else ("Q80003" if "Q80003" in df.columns else None)
-            )
-            if seg_col:
-                matched_seg = df[seg_col].astype(str).str.contains(segment_name, case=False, na=False)
-                count += int((completed & matched_seg).sum())
-    return count
-
-
-ach_rom_r1m = get_segment_achieved("R0M-R1M")
-ach_r1m_r5m = get_segment_achieved("R1M-R5M")
-ach_r5m_r10m = get_segment_achieved("R5M-R10M")
-ach_r10_r60m = get_segment_achieved("R10-R60M")
-ach_r60_r150m = get_segment_achieved("R60-R150M")
-ach_r150m_plus = get_segment_achieved("R150M+")
-
-total_seg_achieved = (
-    ach_rom_r1m
-    + ach_r1m_r5m
-    + ach_r5m_r10m
-    + ach_r10_r60m
-    + ach_r60_r150m
-    + ach_r150m_plus
-)
-total_seg_outstanding = max(0, total_segment_quota - total_seg_achieved)
-
-seg_breakdown_data = {
-    "Segment": [
-        "R0M-R1M",
-        "R1M-R5M",
-        "R5M-R10M",
-        "R10-R60M",
-        "R60-R150M",
-        "R150M+",
-        "Total",
-    ],
-    "TOTAL Target": [
-        q_rom_r1m,
-        q_r1m_r5m,
-        q_r5m_r10m,
-        q_r10_r60m,
-        q_r60_r150m,
-        q_r150m_plus,
-        total_segment_quota,
-    ],
-    "TOTAL Achieved": [
-        ach_rom_r1m,
-        ach_r1m_r5m,
-        ach_r5m_r10m,
-        ach_r10_r60m,
-        ach_r60_r150m,
-        ach_r150m_plus,
-        total_seg_achieved,
-    ],
-    "TOTAL Outstanding": [
-        max(0, q_rom_r1m - ach_rom_r1m),
-        max(0, q_r1m_r5m - ach_r1m_r5m),
-        max(0, q_r5m_r10m - ach_r5m_r10m),
-        max(0, q_r10_r60m - ach_r10_r60m),
-        max(0, q_r60_r150m - ach_r60_r150m),
-        max(0, q_r150m_plus - ach_r150m_plus),
-        total_seg_outstanding,
-    ],
-}
-
-df_seg_breakdown = pd.DataFrame(seg_breakdown_data)
-st.dataframe(df_seg_breakdown, use_container_width=True, hide_index=True)
