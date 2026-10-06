@@ -1,3 +1,4 @@
+import io
 import tempfile
 import pandas as pd
 import pyreadstat
@@ -216,7 +217,7 @@ def get_segment_achieved(target_df, segment_keywords):
     return count
 
 
-# Mapped precisely to Growth and R10Mil datasets using V44011[cite: 8]
+# Mapped precisely to Growth and R10Mil datasets using V44011
 ach_rom_r1m = get_segment_achieved(df_grow, ["r0m-r1m"])
 ach_r1m_r5m = get_segment_achieved(df_grow, ["r1m-r5m"])
 ach_r5m_r10m = get_segment_achieved(df_grow, ["r5m-r10"])
@@ -276,3 +277,168 @@ seg_breakdown_data = {
 
 df_seg_breakdown = pd.DataFrame(seg_breakdown_data)
 st.dataframe(df_seg_breakdown, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+
+# ==========================================
+# SECTION 6: BUSINESS REGIONAL & SEGMENT BREAKDOWN (GROWTH DATASET)
+# ==========================================
+st.markdown("### 🌍 Business Regional & Segment Breakdown (Growth / V12290 & V13290)")
+
+# Define standard sub-regions list
+standard_subregions = [
+    "Eastern Cape",
+    "Free State",
+    "Gauteng East",
+    "Gauteng South Central/Klipriver",
+    "Gauteng Tshwane East",
+    "Gauteng Tshwane North",
+    "Gauteng Tshwane South",
+    "Gauteng West-Rand",
+    "Greater Sandton",
+    "Gauteng Midrand",
+    "KZN North",
+    "KZN South",
+    "KZN West",
+    "Limpopo",
+    "Mpumalanga",
+    "North West",
+    "Northern Cape",
+    "Western Cape",
+]
+
+standard_regions = ["Cape", "Gauteng North", "Gauteng South Central", "Inland", "KwaZulu-Natal"]
+
+# Helper to normalize sub-region mapping from raw V13290 and V12290
+def map_subregion_and_region(row_sub, row_reg):
+    sub_str = str(row_sub).strip() if pd.notnull(row_sub) else ""
+    reg_str = str(row_reg).strip() if pd.notnull(row_reg) else ""
+    
+    sub_lower = sub_str.lower()
+    
+    # Handle mappings for sub-regions with variations / misclassifications
+    if "eastern cape" in sub_lower:
+        return "Eastern Cape", "Cape"
+    elif "free state" in sub_lower:
+        return "Free State", "Inland"
+    elif "gauteng east" in sub_lower:
+        return "Gauteng East", "Gauteng South Central"
+    elif "klipriver" in sub_lower or "south central" in sub_lower:
+        return "Gauteng South Central/Klipriver", "Gauteng South Central"
+    elif "tshwane east" in sub_lower:
+        return "Gauteng Tshwane East", "Gauteng North"
+    elif "tshwane north" in sub_lower:
+        return "Gauteng Tshwane North", "Gauteng North"
+    elif "tshwane south" in sub_lower:
+        return "Gauteng Tshwane South", "Gauteng North"
+    elif "west-rand" in sub_lower or "west rand" in sub_lower:
+        return "Gauteng West-Rand", "Gauteng South Central"
+    elif "greater sandton" in sub_lower or "sandton" in sub_lower:
+        if "gn growth" in sub_lower or "north" in reg_str.lower():
+            return "Greater Sandton", "Gauteng North"
+        return "Greater Sandton", "Gauteng South Central"
+    elif "midrand" in sub_lower:
+        if "gn growth" in sub_lower or "north" in reg_str.lower():
+            return "Gauteng Midrand", "Gauteng North"
+        return "Gauteng Midrand", "Gauteng South Central"
+    elif "kzn north" in sub_lower:
+        return "KZN North", "KwaZulu-Natal"
+    elif "kzn south" in sub_lower:
+        return "KZN South", "KwaZulu-Natal"
+    elif "kzn west" in sub_lower or "kzn" in sub_lower:
+        return "KZN West", "KwaZulu-Natal"
+    elif "limpopo" in sub_lower:
+        return "Limpopo", "Inland"
+    elif "mpumalanga" in sub_lower or "moumalanga" in sub_lower:
+        return "Mpumalanga", "Inland"
+    elif "north west" in sub_lower:
+        return "North West", "Inland"
+    elif "northern cape" in sub_lower:
+        return "Northern Cape", "Cape"
+    elif "western cape" in sub_lower:
+        return "Western Cape", "Cape"
+    
+    # Fallback to raw or region
+    return sub_str if sub_str else "Unknown", reg_str if reg_str else "Unknown"
+
+# Build Business Regional Breakdown Matrix if df_grow is available
+bus_reg_matrix = pd.DataFrame(0, index=standard_subregions, columns=standard_regions + ["Total"])
+
+if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.columns:
+    str_val = df_grow["V9999"].astype(str).str.lower()
+    completed_df = df_grow[str_val.str.contains("continue", na=False)].copy()
+    
+    for idx, row in completed_df.iterrows():
+        raw_sub = row.get("V13290", "")
+        raw_reg = row.get("V12290", "")
+        mapped_sub, mapped_reg = map_subregion_and_region(raw_sub, raw_reg)
+        if mapped_sub in bus_reg_matrix.index and mapped_reg in bus_reg_matrix.columns:
+            bus_reg_matrix.loc[mapped_sub, mapped_reg] += 1
+
+bus_reg_matrix["Total"] = bus_reg_matrix[standard_regions].sum(axis=1)
+
+st.markdown("#### Business Regional Breakdown")
+st.dataframe(bus_reg_matrix, use_container_width=True)
+
+# Build Business Segment Breakdown Matrix (Segments as Rows, Regions as Columns)
+standard_segments = ["R0M-R1M", "R1M-R5M", "R5M-R10M", "R10-R60M"]
+bus_seg_matrix = pd.DataFrame(0, index=standard_segments, columns=standard_regions + ["Total", "Quota", "Outstanding"])
+
+# Default business segment quotas
+bus_quotas = {"R0M-R1M": 1600, "R1M-R5M": 1100, "R5M-R10M": 900, "R10-R60M": 1100}
+
+if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.columns and "V44011" in df_grow.columns:
+    str_val = df_grow["V9999"].astype(str).str.lower()
+    completed_df = df_grow[str_val.str.contains("continue", na=False)].copy()
+    
+    for idx, row in completed_df.iterrows():
+        raw_sub = row.get("V13290", "")
+        raw_reg = row.get("V12290", "")
+        _, mapped_reg = map_subregion_and_region(raw_sub, raw_reg)
+        
+        v44 = str(row.get("V44011", "")).lower()
+        seg_name = None
+        if "r0m-r1m" in v44:
+            seg_name = "R0M-R1M"
+        elif "r1m-r5m" in v44:
+            seg_name = "R1M-R5M"
+        elif "r5m-r10" in v44:
+            seg_name = "R5M-R10M"
+        elif "r10m-r60m" in v44:
+            seg_name = "R10-R60M"
+            
+        if seg_name and seg_name in bus_seg_matrix.index and mapped_reg in bus_seg_matrix.columns:
+            bus_seg_matrix.loc[seg_name, mapped_reg] += 1
+
+bus_seg_matrix["Total"] = bus_seg_matrix[standard_regions].sum(axis=1)
+for seg in standard_segments:
+    q_val = bus_quotas.get(seg, 0)
+    ach_val = bus_seg_matrix.loc[seg, "Total"]
+    bus_seg_matrix.loc[seg, "Quota"] = q_val
+    bus_seg_matrix.loc[seg, "Outstanding"] = max(0, q_val - ach_val)
+
+st.markdown("#### Business Segment Breakdown Matrix")
+st.dataframe(bus_seg_matrix, use_container_width=True)
+
+# ==========================================
+# SECTION 7: EXCEL DOWNLOAD WORKBOOK GENERATION
+# ==========================================
+st.markdown("---")
+st.markdown("### 📥 Download PM Update Workbook")
+
+def create_pm_workbook():
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_summary.to_excel(writer, sheet_name='Summary', index=False)
+        df_seg_breakdown.to_excel(writer, sheet_name='Segment Quotas', index=False)
+        bus_reg_matrix.to_excel(writer, sheet_name='Update Business (Region)')
+        bus_seg_matrix.to_excel(writer, sheet_name='Update Business (Segment)')
+    return output.getvalue()
+
+excel_data = create_pm_workbook()
+st.download_button(
+    label="📊 Generate & Download Exact PM Update Workbook",
+    data=excel_data,
+    file_name="Star_Detailed_Update_Live.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
