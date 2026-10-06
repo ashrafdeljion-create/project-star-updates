@@ -417,7 +417,7 @@ for seg in standard_segments:
 st.markdown("#### Business Segment Breakdown Matrix (Quota & Outstanding)")
 st.dataframe(bus_seg_matrix, use_container_width=True)
 
-# Build Business Regional vs Segments Crosstab (Sub-regions as Rows, Segments R0m-R1m, R1m-R5m, R5m-R10 as Columns)[cite: 15]
+# Build Business Regional vs Segments Crosstab (Sub-regions as Rows, Segments R0m-R1m, R1m-R5m, R5m-R10 as Columns)
 crosstab_segments = ["R0m-R1m", "R1m-R5m", "R5m-R10"]
 bus_reg_seg_crosstab = pd.DataFrame(0, index=standard_subregions, columns=crosstab_segments + ["TOTAL"])
 
@@ -444,7 +444,6 @@ if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.co
 
 bus_reg_seg_crosstab["TOTAL"] = bus_reg_seg_crosstab[crosstab_segments].sum(axis=1)
 
-# Add TOTAL row at the bottom matching the exact format
 total_row = bus_reg_seg_crosstab.sum(numeric_only=True)
 bus_reg_seg_crosstab.loc["TOTAL"] = total_row
 
@@ -460,11 +459,24 @@ st.markdown("### 📥 Download PM Update Workbook")
 def create_pm_workbook():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Summary on its own
         df_summary.to_excel(writer, sheet_name='Summary', index=False)
-        df_seg_breakdown.to_excel(writer, sheet_name='Segment Quotas', index=False)
-        bus_reg_matrix.to_excel(writer, sheet_name='Update Business (Region)')
-        bus_seg_matrix.to_excel(writer, sheet_name='Update Business (Segment)')
-        bus_reg_seg_crosstab.to_excel(writer, sheet_name='Update Business (Subreg vs Seg)')
+        
+        # Sheet 2: All Business cross-tabulations on one sheet ('Update Business')
+        # We use startcol / startrow to place them cleanly side-by-side and stacked
+        workbook = writer.book
+        worksheet = workbook.create_sheet(title='Update Business')
+        
+        # Write Table 1: Regional Breakdown (Top Left)
+        bus_reg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=0)
+        
+        # Write Table 2: Segment Breakdown Matrix (Top Right, e.g. column index 12)
+        # To leave breathing room, let's place it around column J (index 10)
+        bus_seg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=10)
+        
+        # Write Table 3: Regional vs Segments Crosstab (Stacked Below, e.g., row index 22)
+        bus_reg_seg_crosstab.to_excel(writer, sheet_name='Update Business', startrow=22, startcol=0)
+
     return output.getvalue()
 
 excel_data = create_pm_workbook()
