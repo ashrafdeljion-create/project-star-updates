@@ -685,38 +685,60 @@ with tab_pub:
 
 
 # ==========================================
-# SECTION 9: EXCEL DOWNLOAD WORKBOOK GENERATION (STYLED & AUTO-WIDTH)
+# SECTION 9: EXCEL DOWNLOAD WORKBOOK GENERATION (ROBUST DUAL-COLOR STYLING)
 # ==========================================
 st.markdown("---")
 st.markdown("### 📥 Download PM Update Workbook")
 
 def style_excel_sheet(ws):
-    # Professional Styling Palette (Dark Teal Header & Light Accent)
-    header_fill = PatternFill(start_color="005E5D", end_color="005E5D", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    
-    subtotal_fill = PatternFill(start_color="E0F2F1", end_color="E0F2F1", fill_type="solid")
-    subtotal_font = Font(name="Calibri", size=11, bold=True, color="003333")
-    
+    teal_fill = PatternFill(start_color="005E5D", end_color="005E5D", fill_type="solid")
+    teal_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    teal_sub_fill = PatternFill(start_color="E0F2F1", end_color="E0F2F1", fill_type="solid")
+    teal_sub_font = Font(name="Calibri", size=11, bold=True, color="003333")
+
+    orange_fill = PatternFill(start_color="D35400", end_color="D35400", fill_type="solid")
+    orange_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    orange_sub_fill = PatternFill(start_color="FDEBD0", end_color="FDEBD0", fill_type="solid")
+    orange_sub_font = Font(name="Calibri", size=11, bold=True, color="7E5109")
+
     border_thin = Border(
         left=Side(style='thin', color='D3D3D3'),
         right=Side(style='thin', color='D3D3D3'),
         top=Side(style='thin', color='D3D3D3'),
         bottom=Side(style='thin', color='D3D3D3')
     )
-    
-    # Iterate through all populated cells to format headers and borders
+
+    # Dynamically find all header rows in the sheet
+    header_rows = [1]
+    for r in range(2, ws.max_row + 1):
+        val_col1 = ws.cell(row=r, column=1).value
+        val_col2 = ws.cell(row=r, column=2).value
+        # Check if row looks like a header (e.g. segment names or column labels)
+        if val_col1 in ["R0m-R1m", "R10m-R60m", "NON-PROFIT ORGANISATION"] or val_col2 in ["R0m-R1m", "R10m-R60m", "R1m-R5m", "R150m+", "Gauteng North", "Gauteng South and Central"]:
+            header_rows.append(r)
+
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
         for cell in row:
-            cell.border = border_thin
-            # Check if it's a header row
-            if cell.row == 1 or (cell.value in ["Segment", "TOTAL", "Total"] and cell.row < 5):
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-            elif cell.value == "TOTAL" or cell.row == ws.max_row:
-                cell.fill = subtotal_fill
-                cell.font = subtotal_font
+            if cell.value is not None:
+                cell.border = border_thin
+                
+                is_lower_table = any(cell.row >= hr for hr in header_rows[1:]) if len(header_rows) > 1 else False
+                
+                if cell.row in header_rows:
+                    if cell.row == 1:
+                        cell.fill = teal_fill
+                        cell.font = teal_font
+                    else:
+                        cell.fill = orange_fill
+                        cell.font = orange_font
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                elif str(cell.value).upper() in ["TOTAL", "TOTAL INLC R10-R60MIL"]:
+                    if is_lower_table:
+                        cell.fill = orange_sub_fill
+                        cell.font = orange_sub_font
+                    else:
+                        cell.fill = teal_sub_fill
+                        cell.font = teal_sub_font
 
     # Auto-adjust column widths with safety margins
     for col in ws.columns:
@@ -736,7 +758,6 @@ def create_pm_workbook():
         df_summary.to_excel(writer, sheet_name='Summary', index=False)
         
         # Sheet 2: Update Business
-        workbook = writer.book
         bus_reg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=0)
         bus_seg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=10)
         bus_reg_seg_crosstab.to_excel(writer, sheet_name='Update Business', startrow=22, startcol=0)
