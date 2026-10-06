@@ -346,9 +346,9 @@ def map_subregion_and_region(row_sub, row_reg):
         return "Mpumalanga", "Inland"
     elif "north west" in sub_lower:
         return "North West", "Inland"
-elif "northern cape" in sub_lower:
+    elif "northern cape" in sub_lower:
         return "Northern Cape", "Inland"
-elif "western cape" in sub_lower:
+    elif "western cape" in sub_lower:
         return "Western Cape", "Cape"
     
     return sub_str if sub_str else "Unknown", reg_str if reg_str else "Unknown"
