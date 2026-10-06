@@ -575,28 +575,34 @@ ent_reg_seg_crosstab.loc["TOTAL"] = ent_total_row
 
 
 # ==========================================
-# SECTION 8: PUBSC (PUBLIC SECTOR) REGIONAL & SECTOR CROSSTAB
+# SECTION 8: PUBSC (PUBLIC SECTOR) REGIONAL & SECTOR CROSSTAB (V12290 & V13290)
 # ==========================================
 pubsc_regions = [
-    "EASTERN CAPE", "FREE STATE", "GAUTENG", "KWAZULU-NATAL", 
-    "LIMPOPO", "MPUMALANGA", "NORTH WEST", "NORTHERN CAPE", "WESTERN CAPE"
+    "EASTERN CAPE",
+    "FREE STATE",
+    "GAUTENG",
+    "KWAZULU-NATAL",
+    "LIMPOPO",
+    "MPUMALANGA",
+    "NORTH WEST",
+    "NORTHERN CAPE",
+    "WESTERN CAPE"
 ]
 
 pubsc_sectors = [
     "NON-PROFIT ORGANISATION",
     "PUBLIC SECTOR COLLEGES & FET'S",
     "PUBLIC SECTOR EMBASSIES",
-    "PUBLIC SECTOR LOCAL GOVERNMENT",
-    "PUBLIC SECTOR PROVINCIAL GOVERNMENT",
+    "PUBLIC SECTOR LOCAL GOVERMENT",
+    "PUBLIC SECTOR PROVINCIAL GOVER",
     "PUBLIC SECTOR PUBLIC SCHOOLS",
-    "PUBLIC SECTOR UNIONS & POLITICS"
+    "PUBLIC SECTOR UNIONS & POLITIC"
 ]
 
 def map_pubsc_region_and_sector(row_reg, row_sec):
-    reg_str = str(row_reg).strip().upper() if pd.notnull(row_reg) else "UNKNOWN"
-    sec_str = str(row_sec).strip().upper() if pd.notnull(row_sec) else "UNKNOWN"
+    reg_str = str(row_reg).strip().upper() if pd.notnull(row_reg) else ""
+    sec_str = str(row_sec).strip().upper() if pd.notnull(row_sec) else ""
     
-    # Normalize Region
     mapped_reg = "UNKNOWN"
     if "EASTERN" in reg_str:
         mapped_reg = "EASTERN CAPE"
@@ -612,40 +618,28 @@ def map_pubsc_region_and_sector(row_reg, row_sec):
         mapped_reg = "MPUMALANGA"
     elif "NORTH WEST" in reg_str:
         mapped_reg = "NORTH WEST"
-    elif "NORTHERN" in reg_str or reg_str == "NORT":
+    elif "NORTHERN" in reg_str:
         mapped_reg = "NORTHERN CAPE"
     elif "WESTERN" in reg_str:
         mapped_reg = "WESTERN CAPE"
         
-    # Normalize Sector
     mapped_sec = "UNKNOWN"
-    if "NON-PROFIT" in sec_str or "NPO" in sec_str:
-        mapped_sec = "NON-PROFIT ORGANISATION"
-    elif "COLLEGE" in sec_str or "FET" in sec_str:
-        mapped_sec = "PUBLIC SECTOR COLLEGES & FET'S"
-    elif "EMBASSY" in sec_str:
-        mapped_sec = "PUBLIC SECTOR EMBASSIES"
-    elif "LOCAL GOV" in sec_str:
-        mapped_sec = "PUBLIC SECTOR LOCAL GOVERNMENT"
-    elif "PROVINCIAL GOV" in sec_str:
-        mapped_sec = "PUBLIC SECTOR PROVINCIAL GOVERNMENT"
-    elif "SCHOOL" in sec_str:
-        mapped_sec = "PUBLIC SECTOR PUBLIC SCHOOLS"
-    elif "UNION" in sec_str or "POLITIC" in sec_str:
-        mapped_sec = "PUBLIC SECTOR UNIONS & POLITICS"
-        
+    for s in pubsc_sectors:
+        if s in sec_str or sec_str in s:
+            mapped_sec = s
+            break
+            
     return mapped_reg, mapped_sec
 
 pubsc_crosstab = pd.DataFrame(0, index=pubsc_sectors, columns=pubsc_regions + ["TOTAL"])
 
-if df_pubw is not None and "V9999" in df_pubw.columns:
+if df_pubw is not None and "V9999" in df_pubw.columns and "V12290" in df_pubw.columns and "V13290" in df_pubw.columns:
     str_val = df_pubw["V9999"].astype(str).str.lower()
     completed_pub = df_pubw[str_val.str.contains("continue", na=False)].copy()
     
     for idx, row in completed_pub.iterrows():
-        # Check standard region/sector columns (V12290 / V44011 or similar in pubw)
-        raw_reg = row.get("V12290", row.get("REGION", ""))
-        raw_sec = row.get("V44011", row.get("SECTOR", ""))
+        raw_reg = row.get("V12290", "")
+        raw_sec = row.get("V13290", "")
         mapped_reg, mapped_sec = map_pubsc_region_and_sector(raw_reg, raw_sec)
         
         if mapped_sec in pubsc_crosstab.index and mapped_reg in pubsc_crosstab.columns:
