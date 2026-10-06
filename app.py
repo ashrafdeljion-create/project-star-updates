@@ -111,7 +111,6 @@ def load_spss_data(uploaded_file):
                 tmp_path = tmp_file.name
 
             df, meta = pyreadstat.read_sav(tmp_path, apply_value_formats=True)
-            # Normalize column names to uppercase to prevent casing mismatches
             df.columns = [str(c).upper() for c in df.columns]
             return df
         except Exception as e:
@@ -125,12 +124,11 @@ df_rmw = load_spss_data(file_rmw)
 df_pubw = load_spss_data(file_pubw)
 
 
-# Robust Calculation Logic for Completions (V9999 == 1)
+# Calculation Logic for Completions (V9999 == 'Continue')
 def count_completions(df):
     if df is not None and "V9999" in df.columns:
-        # Check numeric 1, string '1', or float 1.0
-        val = df["V9999"]
-        completed_filter = (val == 1) | (val == 1.0) | (val == "1")
+        str_val = df["V9999"].astype(str).str.lower()
+        completed_filter = str_val.str.contains("continue", na=False)
         return int(completed_filter.sum())
     return 0
 
@@ -205,14 +203,21 @@ def get_segment_achieved(segment_name):
     count = 0
     for df in [df_grow, df_rmw, df_pubw]:
         if df is not None and "V9999" in df.columns:
-            val = df["V9999"]
-            completed = (val == 1) | (val == 1.0) | (val == "1")
-            
-            # Look for segment column (SEG or Q80003)
-            seg_col = "SEG" if "SEG" in df.columns else ("Q80003" if "Q80003" in df.columns else None)
-            
+            str_val = df["V9999"].astype(str).str.lower()
+            completed = str_val.str.contains("continue", na=False)
+
+            seg_col = (
+                "SEG"
+                if "SEG" in df.columns
+                else ("Q80003" if "Q80003" in df.columns else None)
+            )
+
             if seg_col:
-                matched_seg = df[seg_col].astype(str).str.contains(segment_name, case=False, na=False)
+                matched_seg = (
+                    df[seg_col]
+                    .astype(str)
+                    .str.contains(segment_name, case=False, na=False)
+                )
                 count += int((completed & matched_seg).sum())
     return count
 
@@ -275,15 +280,3 @@ seg_breakdown_data = {
 
 df_seg_breakdown = pd.DataFrame(seg_breakdown_data)
 st.dataframe(df_seg_breakdown, use_container_width=True, hide_index=True)
-
-# Optional Debug Expander to verify columns if it still shows 0
-with st.expander("🛠️ Debug File Columns & V9999 Check"):
-    for name, df in [("Growth", df_grow), ("R10Mil", df_rmw), ("PUBSC", df_pubw)]:
-        if df is not None:
-            st.write(f"**{name} Dataset Loaded:** {df.shape[0]} rows, {df.shape[1]} columns")
-            if "V9999" in df.columns:
-                st.write(f"-> V9999 unique values: {df['V9999'].unique()}" )
-            else:
-                st.warning(f"-> V9999 NOT found in {name}! Available columns containing V: [e.g. { [c for c in df.columns if 'V' in c][:5] }]")
-        else:
-            st.write(f"**{name} Dataset:** Not uploaded yet.")
