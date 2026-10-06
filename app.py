@@ -504,8 +504,4 @@ if df_rmw is not None and "V9999" in df_rmw.columns and "V13290" in df_rmw.colum
     str_val = df_rmw["V9999"].astype(str).str.lower()
     completed_ent = df_rmw[str_val.str.contains("continue", na=False)].copy()
     
-    for idx, row in completed_ent.iterrows():
-        raw_sub = row.get("V13290", "")
-        raw_reg = row.get("V12290", "")
-        mapped_sub, mapped_reg = map_ent_subregion_and_region(raw_sub, raw_reg)
-        if mapped_sub in ent_reg_matrix.index and mapped_reg in ent_reg_matrix.columns:
+    for idx, row in completed_ent.
