@@ -3,6 +3,9 @@ import tempfile
 import pandas as pd
 import pyreadstat
 import streamlit as st
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 # Configure Streamlit Page Layout
 st.set_page_config(
@@ -682,10 +685,49 @@ with tab_pub:
 
 
 # ==========================================
-# SECTION 9: EXCEL DOWNLOAD WORKBOOK GENERATION
+# SECTION 9: EXCEL DOWNLOAD WORKBOOK GENERATION (STYLED & AUTO-WIDTH)
 # ==========================================
 st.markdown("---")
 st.markdown("### 📥 Download PM Update Workbook")
+
+def style_excel_sheet(ws):
+    # Professional Styling Palette (Dark Teal Header & Light Accent)
+    header_fill = PatternFill(start_color="005E5D", end_color="005E5D", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    
+    subtotal_fill = PatternFill(start_color="E0F2F1", end_color="E0F2F1", fill_type="solid")
+    subtotal_font = Font(name="Calibri", size=11, bold=True, color="003333")
+    
+    border_thin = Border(
+        left=Side(style='thin', color='D3D3D3'),
+        right=Side(style='thin', color='D3D3D3'),
+        top=Side(style='thin', color='D3D3D3'),
+        bottom=Side(style='thin', color='D3D3D3')
+    )
+    
+    # Iterate through all populated cells to format headers and borders
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+        for cell in row:
+            cell.border = border_thin
+            # Check if it's a header row
+            if cell.row == 1 or (cell.value in ["Segment", "TOTAL", "Total"] and cell.row < 5):
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif cell.value == "TOTAL" or cell.row == ws.max_row:
+                cell.fill = subtotal_fill
+                cell.font = subtotal_font
+
+    # Auto-adjust column widths with safety margins
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.value is not None:
+                val_str = str(cell.value)
+                if len(val_str) > max_len:
+                    max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
 def create_pm_workbook():
     output = io.BytesIO()
@@ -695,26 +737,28 @@ def create_pm_workbook():
         
         # Sheet 2: Update Business
         workbook = writer.book
-        ws_bus = workbook.create_sheet(title='Update Business')
         bus_reg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=0)
         bus_seg_matrix.to_excel(writer, sheet_name='Update Business', startrow=0, startcol=10)
         bus_reg_seg_crosstab.to_excel(writer, sheet_name='Update Business', startrow=22, startcol=0)
         
         # Sheet 3: Update Enterprise
-        ws_ent = workbook.create_sheet(title='Update Enterprise')
         ent_reg_matrix.to_excel(writer, sheet_name='Update Enterprise', startrow=0, startcol=0)
         ent_seg_matrix.to_excel(writer, sheet_name='Update Enterprise', startrow=0, startcol=10)
         ent_reg_seg_crosstab.to_excel(writer, sheet_name='Update Enterprise', startrow=22, startcol=0)
         
         # Sheet 4: Update PUBSC
-        ws_pub = workbook.create_sheet(title='Update PUBSC')
         pubsc_crosstab.to_excel(writer, sheet_name='Update PUBSC', startrow=0, startcol=0)
+
+        # Apply styling & auto-width to all sheets
+        for sheetname in writer.sheets:
+            ws = writer.sheets[sheetname]
+            style_excel_sheet(ws)
 
     return output.getvalue()
 
 excel_data = create_pm_workbook()
 st.download_button(
-    label="📊 Generate & Download Exact PM Update Workbook",
+    label="📊 Generate & Download Styled PM Update Workbook",
     data=excel_data,
     file_name="Star_Detailed_Update_Live.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
