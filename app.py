@@ -217,7 +217,6 @@ def get_segment_achieved(target_df, segment_keywords):
     return count
 
 
-# Mapped precisely to Growth and R10Mil datasets using V44011
 ach_rom_r1m = get_segment_achieved(df_grow, ["r0m-r1m"])
 ach_r1m_r5m = get_segment_achieved(df_grow, ["r1m-r5m"])
 ach_r5m_r10m = get_segment_achieved(df_grow, ["r5m-r10"])
@@ -514,7 +513,6 @@ if df_rmw is not None and "V9999" in df_rmw.columns and "V13290" in df_rmw.colum
 
 ent_reg_matrix["Total"] = ent_reg_matrix[ent_regions].sum(axis=1)
 
-# Enterprise Segment Breakdown Matrix (R10-R60M, R60-R150M, R150M+)
 ent_segments = ["R10-R60M", "R60-R150M", "R150M+"]
 ent_seg_matrix = pd.DataFrame(0, index=ent_segments, columns=ent_regions + ["Total", "Quota", "Outstanding"])
 ent_quotas = {"R10-R60M": 550, "R60-R150M": 450, "R150M+": 250}
@@ -547,7 +545,6 @@ for seg in ent_segments:
     ent_seg_matrix.loc[seg, "Quota"] = q_val
     ent_seg_matrix.loc[seg, "Outstanding"] = max(0, q_val - ach_val)
 
-# Enterprise Regional vs Segments Crosstab (Matching requested columns: R10m-R60m, R150m+, R60m-R150)
 crosstab_ent_segments = ["R10m-R60m", "R150m+", "R60m-R150"]
 ent_reg_seg_crosstab = pd.DataFrame(0, index=ent_subregions, columns=crosstab_ent_segments + ["TOTAL"])
 
@@ -578,10 +575,92 @@ ent_reg_seg_crosstab.loc["TOTAL"] = ent_total_row
 
 
 # ==========================================
+# SECTION 8: PUBSC (PUBLIC SECTOR) REGIONAL & SECTOR CROSSTAB
+# ==========================================
+pubsc_regions = [
+    "EASTERN CAPE", "FREE STATE", "GAUTENG", "KWAZULU-NATAL", 
+    "LIMPOPO", "MPUMALANGA", "NORTH WEST", "NORTHERN CAPE", "WESTERN CAPE"
+]
+
+pubsc_sectors = [
+    "NON-PROFIT ORGANISATION",
+    "PUBLIC SECTOR COLLEGES & FET'S",
+    "PUBLIC SECTOR EMBASSIES",
+    "PUBLIC SECTOR LOCAL GOVERNMENT",
+    "PUBLIC SECTOR PROVINCIAL GOVERNMENT",
+    "PUBLIC SECTOR PUBLIC SCHOOLS",
+    "PUBLIC SECTOR UNIONS & POLITICS"
+]
+
+def map_pubsc_region_and_sector(row_reg, row_sec):
+    reg_str = str(row_reg).strip().upper() if pd.notnull(row_reg) else "UNKNOWN"
+    sec_str = str(row_sec).strip().upper() if pd.notnull(row_sec) else "UNKNOWN"
+    
+    # Normalize Region
+    mapped_reg = "UNKNOWN"
+    if "EASTERN" in reg_str:
+        mapped_reg = "EASTERN CAPE"
+    elif "FREE" in reg_str:
+        mapped_reg = "FREE STATE"
+    elif "GAUTENG" in reg_str:
+        mapped_reg = "GAUTENG"
+    elif "KWAZULU" in reg_str or "KZN" in reg_str:
+        mapped_reg = "KWAZULU-NATAL"
+    elif "LIMPOPO" in reg_str:
+        mapped_reg = "LIMPOPO"
+    elif "MPUMALANGA" in reg_str:
+        mapped_reg = "MPUMALANGA"
+    elif "NORTH WEST" in reg_str:
+        mapped_reg = "NORTH WEST"
+    elif "NORTHERN" in reg_str or reg_str == "NORT":
+        mapped_reg = "NORTHERN CAPE"
+    elif "WESTERN" in reg_str:
+        mapped_reg = "WESTERN CAPE"
+        
+    # Normalize Sector
+    mapped_sec = "UNKNOWN"
+    if "NON-PROFIT" in sec_str or "NPO" in sec_str:
+        mapped_sec = "NON-PROFIT ORGANISATION"
+    elif "COLLEGE" in sec_str or "FET" in sec_str:
+        mapped_sec = "PUBLIC SECTOR COLLEGES & FET'S"
+    elif "EMBASSY" in sec_str:
+        mapped_sec = "PUBLIC SECTOR EMBASSIES"
+    elif "LOCAL GOV" in sec_str:
+        mapped_sec = "PUBLIC SECTOR LOCAL GOVERNMENT"
+    elif "PROVINCIAL GOV" in sec_str:
+        mapped_sec = "PUBLIC SECTOR PROVINCIAL GOVERNMENT"
+    elif "SCHOOL" in sec_str:
+        mapped_sec = "PUBLIC SECTOR PUBLIC SCHOOLS"
+    elif "UNION" in sec_str or "POLITIC" in sec_str:
+        mapped_sec = "PUBLIC SECTOR UNIONS & POLITICS"
+        
+    return mapped_reg, mapped_sec
+
+pubsc_crosstab = pd.DataFrame(0, index=pubsc_sectors, columns=pubsc_regions + ["TOTAL"])
+
+if df_pubw is not None and "V9999" in df_pubw.columns:
+    str_val = df_pubw["V9999"].astype(str).str.lower()
+    completed_pub = df_pubw[str_val.str.contains("continue", na=False)].copy()
+    
+    for idx, row in completed_pub.iterrows():
+        # Check standard region/sector columns (V12290 / V44011 or similar in pubw)
+        raw_reg = row.get("V12290", row.get("REGION", ""))
+        raw_sec = row.get("V44011", row.get("SECTOR", ""))
+        mapped_reg, mapped_sec = map_pubsc_region_and_sector(raw_reg, raw_sec)
+        
+        if mapped_sec in pubsc_crosstab.index and mapped_reg in pubsc_crosstab.columns:
+            pubsc_crosstab.loc[mapped_sec, mapped_reg] += 1
+
+pubsc_crosstab["TOTAL"] = pubsc_crosstab[pubsc_regions].sum(axis=1)
+pubsc_total_row = pubsc_crosstab.sum(numeric_only=True)
+pubsc_crosstab.loc["TOTAL"] = pubsc_total_row
+
+
+# ==========================================
 # UI TABS FOR BREAKDOWNS (SEPARATED TABS)
 # ==========================================
 st.markdown("### 🔍 Live Regional & Segment Breakdown Tables")
-tab_bus, tab_ent = st.tabs(["Business Breakdown", "Enterprise Breakdown"])
+tab_bus, tab_ent, tab_pub = st.tabs(["Business Breakdown", "Enterprise Breakdown", "PUBSC Breakdown"])
 
 with tab_bus:
     st.markdown("#### Business Regional Breakdown")
@@ -603,9 +682,13 @@ with tab_ent:
     st.markdown("#### Enterprise Regional vs. Segments Crosstab (Sub-regions as Rows, Segments as Columns)")
     st.dataframe(ent_reg_seg_crosstab, use_container_width=True)
 
+with tab_pub:
+    st.markdown("#### Public Sector (PUBSC) Regional vs. Sector Crosstab")
+    st.dataframe(pubsc_crosstab, use_container_width=True)
+
 
 # ==========================================
-# SECTION 8: EXCEL DOWNLOAD WORKBOOK GENERATION
+# SECTION 9: EXCEL DOWNLOAD WORKBOOK GENERATION
 # ==========================================
 st.markdown("---")
 st.markdown("### 📥 Download PM Update Workbook")
@@ -628,6 +711,10 @@ def create_pm_workbook():
         ent_reg_matrix.to_excel(writer, sheet_name='Update Enterprise', startrow=0, startcol=0)
         ent_seg_matrix.to_excel(writer, sheet_name='Update Enterprise', startrow=0, startcol=10)
         ent_reg_seg_crosstab.to_excel(writer, sheet_name='Update Enterprise', startrow=22, startcol=0)
+        
+        # Sheet 4: Update PUBSC
+        ws_pub = workbook.create_sheet(title='Update PUBSC')
+        pubsc_crosstab.to_excel(writer, sheet_name='Update PUBSC', startrow=0, startcol=0)
 
     return output.getvalue()
 
