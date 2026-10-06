@@ -217,7 +217,7 @@ def get_segment_achieved(target_df, segment_keywords):
     return count
 
 
-# Mapped precisely to Growth and R10Mil datasets using V44011
+# Mapped precisely to Growth and R10Mil datasets using V44011[cite: 8]
 ach_rom_r1m = get_segment_achieved(df_grow, ["r0m-r1m"])
 ach_r1m_r5m = get_segment_achieved(df_grow, ["r1m-r5m"])
 ach_r5m_r10m = get_segment_achieved(df_grow, ["r5m-r10"])
@@ -316,7 +316,6 @@ def map_subregion_and_region(row_sub, row_reg):
     
     sub_lower = sub_str.lower()
     
-    # Handle mappings for sub-regions with variations / misclassifications
     if "eastern cape" in sub_lower:
         return "Eastern Cape", "Cape"
     elif "free state" in sub_lower:
@@ -358,7 +357,6 @@ def map_subregion_and_region(row_sub, row_reg):
     elif "western cape" in sub_lower:
         return "Western Cape", "Cape"
     
-    # Fallback to raw or region
     return sub_str if sub_str else "Unknown", reg_str if reg_str else "Unknown"
 
 # Build Business Regional Breakdown Matrix if df_grow is available
@@ -380,65 +378,11 @@ bus_reg_matrix["Total"] = bus_reg_matrix[standard_regions].sum(axis=1)
 st.markdown("#### Business Regional Breakdown")
 st.dataframe(bus_reg_matrix, use_container_width=True)
 
-# Build Business Segment Breakdown Matrix (Segments as Rows, Regions as Columns)
+# Build Business Segment Breakdown Matrix (Quota & Outstanding)
 standard_segments = ["R0M-R1M", "R1M-R5M", "R5M-R10M", "R10-R60M"]
 bus_seg_matrix = pd.DataFrame(0, index=standard_segments, columns=standard_regions + ["Total", "Quota", "Outstanding"])
 
-# Default business segment quotas
 bus_quotas = {"R0M-R1M": 1600, "R1M-R5M": 1100, "R5M-R10M": 900, "R10-R60M": 1100}
 
 if df_grow is not None and "V9999" in df_grow.columns and "V13290" in df_grow.columns and "V44011" in df_grow.columns:
-    str_val = df_grow["V9999"].astype(str).str.lower()
-    completed_df = df_grow[str_val.str.contains("continue", na=False)].copy()
-    
-    for idx, row in completed_df.iterrows():
-        raw_sub = row.get("V13290", "")
-        raw_reg = row.get("V12290", "")
-        _, mapped_reg = map_subregion_and_region(raw_sub, raw_reg)
-        
-        v44 = str(row.get("V44011", "")).lower()
-        seg_name = None
-        if "r0m-r1m" in v44:
-            seg_name = "R0M-R1M"
-        elif "r1m-r5m" in v44:
-            seg_name = "R1M-R5M"
-        elif "r5m-r10" in v44:
-            seg_name = "R5M-R10M"
-        elif "r10m-r60m" in v44:
-            seg_name = "R10-R60M"
-            
-        if seg_name and seg_name in bus_seg_matrix.index and mapped_reg in bus_seg_matrix.columns:
-            bus_seg_matrix.loc[seg_name, mapped_reg] += 1
-
-bus_seg_matrix["Total"] = bus_seg_matrix[standard_regions].sum(axis=1)
-for seg in standard_segments:
-    q_val = bus_quotas.get(seg, 0)
-    ach_val = bus_seg_matrix.loc[seg, "Total"]
-    bus_seg_matrix.loc[seg, "Quota"] = q_val
-    bus_seg_matrix.loc[seg, "Outstanding"] = max(0, q_val - ach_val)
-
-st.markdown("#### Business Segment Breakdown Matrix")
-st.dataframe(bus_seg_matrix, use_container_width=True)
-
-# ==========================================
-# SECTION 7: EXCEL DOWNLOAD WORKBOOK GENERATION
-# ==========================================
-st.markdown("---")
-st.markdown("### 📥 Download PM Update Workbook")
-
-def create_pm_workbook():
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_summary.to_excel(writer, sheet_name='Summary', index=False)
-        df_seg_breakdown.to_excel(writer, sheet_name='Segment Quotas', index=False)
-        bus_reg_matrix.to_excel(writer, sheet_name='Update Business (Region)')
-        bus_seg_matrix.to_excel(writer, sheet_name='Update Business (Segment)')
-    return output.getvalue()
-
-excel_data = create_pm_workbook()
-st.download_button(
-    label="📊 Generate & Download Exact PM Update Workbook",
-    data=excel_data,
-    file_name="Star_Detailed_Update_Live.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+    str_
