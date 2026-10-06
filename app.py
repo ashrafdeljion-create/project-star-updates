@@ -199,35 +199,31 @@ st.markdown("---")
 st.markdown("### 📊 Segment Quotas Executive Summary Breakdown")
 
 
-def get_segment_achieved(segment_name):
+def get_segment_achieved(target_df, segment_keywords):
     count = 0
-    for df in [df_grow, df_rmw, df_pubw]:
-        if df is not None and "V9999" in df.columns:
-            str_val = df["V9999"].astype(str).str.lower()
-            completed = str_val.str.contains("continue", na=False)
+    if target_df is not None and "V9999" in target_df.columns and "V44011" in target_df.columns:
+        str_val = target_df["V9999"].astype(str).str.lower()
+        completed = str_val.str.contains("continue", na=False)
 
-            seg_col = (
-                "SEG"
-                if "SEG" in df.columns
-                else ("Q80003" if "Q80003" in df.columns else None)
+        matched_seg = pd.Series(False, index=target_df.index)
+        for kw in segment_keywords:
+            matched_seg = matched_seg | (
+                target_df["V44011"]
+                .astype(str)
+                .str.contains(kw, case=False, na=False)
             )
-
-            if seg_col:
-                matched_seg = (
-                    df[seg_col]
-                    .astype(str)
-                    .str.contains(segment_name, case=False, na=False)
-                )
-                count += int((completed & matched_seg).sum())
+        count = int((completed & matched_seg).sum())
     return count
 
 
-ach_rom_r1m = get_segment_achieved("R0M-R1M")
-ach_r1m_r5m = get_segment_achieved("R1M-R5M")
-ach_r5m_r10m = get_segment_achieved("R5M-R10M")
-ach_r10_r60m = get_segment_achieved("R10-R60M")
-ach_r60_r150m = get_segment_achieved("R60-R150M")
-ach_r150m_plus = get_segment_achieved("R150M+")
+# Mapped precisely to Growth and R10Mil datasets using V44011[cite: 8]
+ach_rom_r1m = get_segment_achieved(df_grow, ["r0m-r1m"])
+ach_r1m_r5m = get_segment_achieved(df_grow, ["r1m-r5m"])
+ach_r5m_r10m = get_segment_achieved(df_grow, ["r5m-r10"])
+
+ach_r10_r60m = get_segment_achieved(df_rmw, ["r10m-r60m"])
+ach_r60_r150m = get_segment_achieved(df_rmw, ["r60m-r150"])
+ach_r150m_plus = get_segment_achieved(df_rmw, ["r150m+"])
 
 total_seg_achieved = (
     ach_rom_r1m
